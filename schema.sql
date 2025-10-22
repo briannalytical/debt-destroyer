@@ -17,16 +17,14 @@ CREATE TABLE monthly_income (
 -- Expense category enum (what the expense is)
 CREATE TYPE essential_expense_category_enum AS ENUM (
     'rent',
-    'mortgage',
-    'utilities',
-    'groceries',
     'car_payment',
-    'car_insurance',
-    'gas',
     'internet',
+    'groceries',
+    'electric',
+    'gas',
+	'water',
     'phone',
-    'streaming_services',
-    'gym_membership',
+    'subscriptions',
     'other'
 );
 
@@ -92,7 +90,6 @@ CREATE TYPE account_type_enum AS ENUM (
     'credit_card',
     'personal_loan',
     'student_loan',
-    'auto_loan',
     'other'
 );
 
