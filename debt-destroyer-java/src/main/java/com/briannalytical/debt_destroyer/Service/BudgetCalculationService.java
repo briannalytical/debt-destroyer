@@ -32,8 +32,8 @@ public class BudgetCalculationService {
     private DebtAccountRepository debtAccountRepository;
 
     /**
-     * Calculate total fixed expenses (rent, car payment, etc.)
-     */
+     calculate total fixed essential expenses
+     **/
     public BigDecimal calculateFixedExpenses() {
         List<Expense> fixedExpenses = expenseRepository
                 .findByIsActiveTrueAndExpenseType(ExpenseType.FIXED);
@@ -44,8 +44,8 @@ public class BudgetCalculationService {
     }
 
     /**
-     * Calculate total variable expenses for a specific month
-     */
+     calculate total variable expenses for a specific month
+     **/
     public BigDecimal calculateVariableExpenses(Integer month, Integer year) {
         List<VariableExpenseAmount> variableAmounts =
                 variableExpenseAmountRepository.findByMonthAndYear(month, year);
@@ -56,9 +56,8 @@ public class BudgetCalculationService {
     }
 
     /**
-     * Calculate monthly sinking fund for irregular expenses
-     * (e.g., $1200 annual insurance = $100/month to set aside)
-     */
+     calculate monthly sinking fund for irregularly occurring expenses
+     **/
     public BigDecimal calculateMonthlySinkingFund() {
         List<IrregularExpense> irregularExpenses =
                 irregularExpenseRepository.findByIsActiveTrue();
@@ -81,8 +80,8 @@ public class BudgetCalculationService {
     }
 
     /**
-     * Calculate total essentials for a specific month
-     */
+     calculate total essentials for a specific month
+     **/
     public BigDecimal calculateTotalEssentials(Integer month, Integer year) {
         BigDecimal fixed = calculateFixedExpenses();
         BigDecimal variable = calculateVariableExpenses(month, year);
@@ -92,8 +91,8 @@ public class BudgetCalculationService {
     }
 
     /**
-     * Calculate leftover funds after essentials
-     */
+     calculate leftover funds after minumums are met
+     **/
     public BigDecimal calculateLeftoverFunds(Integer month, Integer year) {
         MonthlyIncome income = monthlyIncomeRepository
                 .findByMonthAndYear(month, year)
@@ -110,10 +109,116 @@ public class BudgetCalculationService {
     }
 
     /**
-     * Generate debt payment recommendations based on utilization
-     */
+     generate debt payment recommendations based on utilization
+     **/
     public List<DebtRecommendation> generateRecommendations(Integer month, Integer year) {
         BigDecimal leftover = calculateLeftoverFunds(month, year);
         List<DebtAccount> debts = debtAccountRepository.findByIsActiveTrue();
 
-        if (leftover.compareTo(BigDecimal.ZERO) <= 0 ||
+        if (leftover.compareTo(BigDecimal.ZERO) <= 0 || debts.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // first calculate total amount of minimums
+        BigDecimal totalMinimums = debts.stream()
+                .map(DebtAccount::getMinimumPayment)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // if minimums cannot be met, just return minimums
+        if (leftover.compareTo(totalMinimums) < 0) {
+            return debts.stream()
+                    .map(debt -> new DebtRecommendation(
+                            debt.getId(),
+                            debt.getName(),
+                            debt.getMinimumPayment(),
+                            0,
+                            "Minimum payment only",
+                            null
+                    ))
+                    .toList();
+        }
+
+        // handling extra/leftover funds
+        BigDecimal extraFunds = leftover.subtract(totalMinimums);
+
+        // sort debts by highest utilization
+        List<DebtAccount> sortedDebts = debts.stream()
+                .sorted(Comparator.comparing(this::calculateUtilization).reversed())
+                .toList();
+
+        List<DebtRecommendation> recommendations = new ArrayList<>();
+        int priority = 1;
+
+        for (DebtAccount debt : sortedDebts) {
+            BigDecimal utilization = calculateUtilization(debt);
+            BigDecimal recommendedPayment = debt.getMinimumPayment();
+            String reason = "Minimum payment";
+
+            // allocate extra funds
+            if (extraFunds.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal extraAllocation = extraFunds.min(
+                        debt.getCurrentBalance().subtract(debt.getMinimumPayment())
+                );
+                recommendedPayment = recommendedPayment.add(extraAllocation);
+                extraFunds = extraFunds.subtract(extraAllocation);
+                reason = String.format("High utilization (%.1f%%)",
+                        utilization.multiply(BigDecimal.valueOf(100)));
+            }
+
+            recommendations.add(new DebtRecommendation(
+                    debt.getId(),
+                    debt.getName(),
+                    recommendedPayment,
+                    priority++,
+                    reason,
+                    utilization
+            ));
+        }
+
+        return recommendations;
+    }
+
+    /**
+     calculate utilization ratio for debt amount
+     **/
+    private BigDecimal calculateUtilization(DebtAccount debt) {
+        if (debt.getCreditLimit() == null ||
+                debt.getCreditLimit().compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO; // Loans don't have utilization
+        }
+
+        return debt.getCurrentBalance()
+                .divide(debt.getCreditLimit(), 4, RoundingMode.HALF_UP);
+    }
+
+    /**
+    inner class for budgeting recommendation results
+     **/
+    public static class DebtRecommendation {
+        private Long debtAccountId;
+        private String accountName;
+        private BigDecimal recommendedPayment;
+        private Integer priorityRank;
+        private String reason;
+        private BigDecimal utilization;
+
+        public DebtRecommendation(Long debtAccountId, String accountName,
+                                  BigDecimal recommendedPayment, Integer priorityRank,
+                                  String reason, BigDecimal utilization) {
+            this.debtAccountId = debtAccountId;
+            this.accountName = accountName;
+            this.recommendedPayment = recommendedPayment;
+            this.priorityRank = priorityRank;
+            this.reason = reason;
+            this.utilization = utilization;
+        }
+
+        // Getters
+        public Long getDebtAccountId() {return debtAccountId;}
+        public String getAccountName() {return accountName;}
+        public BigDecimal getRecommendedPayment() {return recommendedPayment;}
+        public Integer getPriorityRank() {return priorityRank;}
+        public String getReason() {return reason;}
+        public BigDecimal getUtilization() {return utilization;}
+    }
+}
