@@ -72,6 +72,13 @@ public class BudgetCalculationService {
                         BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
                 case QUARTERLY -> expense.getAmount().divide(
                         BigDecimal.valueOf(3), 2, RoundingMode.HALF_UP);
+                case CUSTOM -> {
+                    if (expense.getCustomMonths() != null && expense.getCustomMonths() > 0) {
+                        yield expense.getAmount().divide(
+                                BigDecimal.valueOf(expense.getCustomMonths()), 2, RoundingMode.HALF_UP);
+                    }
+                    yield BigDecimal.ZERO;  // If custom_months not set, contribute nothing
+                }
             };
             totalMonthly = totalMonthly.add(monthlyAmount);
         }

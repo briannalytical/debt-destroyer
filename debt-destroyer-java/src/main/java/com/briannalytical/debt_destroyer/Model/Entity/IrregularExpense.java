@@ -34,6 +34,9 @@ public class IrregularExpense {
     @Column(name = "next_due_date", nullable = false)
     private LocalDate nextDueDate;
 
+    @Column(name = "custom_months")
+    private Integer customMonths;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
