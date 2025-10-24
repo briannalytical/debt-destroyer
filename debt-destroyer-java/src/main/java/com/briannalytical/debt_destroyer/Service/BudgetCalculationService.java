@@ -98,7 +98,7 @@ public class BudgetCalculationService {
     }
 
     /**
-     calculate leftover funds after minumums are met
+     calculate leftover funds after minimums are met
      **/
     public BigDecimal calculateLeftoverFunds(Integer month, Integer year) {
         MonthlyIncome income = monthlyIncomeRepository
